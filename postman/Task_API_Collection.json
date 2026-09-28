@@ -1,0 +1,510 @@
+{
+  "info": {
+    "name": "Task API",
+    "_postman_id": "b7f2c1a4-3e5d-4a8b-9c1f-2d6e7f8a9b0c",
+    "description": "REST API for a task management service. Run requests top to bottom: the Create request captures the new id into the taskId variable, which every other request uses.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000", "type": "string" },
+    { "key": "taskId", "value": "1", "type": "string" }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (!pm.environment.get('baseUrl')) {",
+          "  pm.environment.set('baseUrl', pm.variables.get('baseUrl'));",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('envelope is well formed', () => {",
+              "  const b = pm.response.json();",
+              "  pm.expect(b.success).to.be.true;",
+              "  pm.expect(b).to.have.property('data');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "List Tasks",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "{{baseUrl}}/tasks", "host": ["{{baseUrl}}"], "path": ["tasks"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('data is an array', () => pm.expect(pm.response.json().data).to.be.an('array'));",
+              "pm.test('count matches data length', () => {",
+              "  const b = pm.response.json();",
+              "  pm.expect(b.count).to.eql(b.data.length);",
+              "});",
+              "pm.test('total is present', () => pm.expect(pm.response.json()).to.have.property('total'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "List Tasks - Filtered Completed",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/tasks?completed=true",
+          "host": ["{{baseUrl}}"],
+          "path": ["tasks"],
+          "query": [{ "key": "completed", "value": "true" }]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('every returned task is completed', () => {",
+              "  pm.response.json().data.forEach(task => pm.expect(task.isCompleted).to.be.true);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "List Tasks - Paginated",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/tasks?limit=5&offset=0",
+          "host": ["{{baseUrl}}"],
+          "path": ["tasks"],
+          "query": [
+            { "key": "limit", "value": "5" },
+            { "key": "offset", "value": "0" }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('page respects limit', () => {",
+              "  const b = pm.response.json();",
+              "  pm.expect(b.data.length).to.be.at.most(5);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create Task",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Buy groceries\",\n  \"description\": \"Milk, eggs, bread\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/tasks", "host": ["{{baseUrl}}"], "path": ["tasks"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "const body = pm.response.json();",
+              "pm.test('envelope is well formed', () => {",
+              "  pm.expect(body.success).to.be.true;",
+              "  pm.expect(body).to.have.property('data');",
+              "});",
+              "pm.test('an id was generated', () => {",
+              "  pm.expect(body.data.id).to.be.a('string');",
+              "  pm.environment.set('taskId', body.data.id);",
+              "});",
+              "pm.test('isCompleted defaults to false', () => pm.expect(body.data.isCompleted).to.be.false);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create Task - Validation Error (empty title)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"title\": \"   \"\n}" },
+        "url": { "raw": "{{baseUrl}}/tasks", "host": ["{{baseUrl}}"], "path": ["tasks"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+              "const body = pm.response.json();",
+              "pm.test('success is false', () => pm.expect(body.success).to.be.false);",
+              "pm.test('details name the offending field', () => {",
+              "  pm.expect(body.details).to.be.an('array');",
+              "  pm.expect(body.details[0].field).to.eql('title');",
+              "  pm.expect(body.details[0].message).to.eql('title cannot be empty');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create Task - Validation Error (missing title)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"description\": \"no title here\"\n}" },
+        "url": { "raw": "{{baseUrl}}/tasks", "host": ["{{baseUrl}}"], "path": ["tasks"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+              "pm.test('title is reported as required', () => {",
+              "  const d = pm.response.json().details;",
+              "  pm.expect(d.some(x => x.message === 'title is required')).to.be.true;",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create Task - Validation Error (isCompleted not boolean)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"title\": \"Bad flag\",\n  \"isCompleted\": \"true\"\n}" },
+        "url": { "raw": "{{baseUrl}}/tasks", "host": ["{{baseUrl}}"], "path": ["tasks"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+              "pm.test('no type coercion', () => {",
+              "  const d = pm.response.json().details;",
+              "  pm.expect(d.some(x => x.message === 'isCompleted must be a boolean')).to.be.true;",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get Task by Id",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/tasks/{{taskId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["tasks", "{{taskId}}"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('id matches taskId', () => pm.expect(body.data.id).to.eql(pm.environment.get('taskId')));",
+              "pm.test('all four fields are typed correctly', () => {",
+              "  pm.expect(body.data.id).to.be.a('string');",
+              "  pm.expect(body.data.title).to.be.a('string');",
+              "  pm.expect(body.data.isCompleted).to.be.a('boolean');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get Task by Id - Not Found (404)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "{{baseUrl}}/tasks/999999", "host": ["{{baseUrl}}"], "path": ["tasks", "999999"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('404 Not Found', () => pm.response.to.have.status(404));",
+              "const body = pm.response.json();",
+              "pm.test('success is false', () => pm.expect(body.success).to.be.false);",
+              "pm.test('error names the id', () => {",
+              "  pm.expect(body.error).to.eql(\"Task with id '999999' not found\");",
+              "});",
+              "pm.test('no data key on errors', () => pm.expect(body).to.not.have.property('data'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get Task by Id - Malformed Id (400)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "{{baseUrl}}/tasks/abc", "host": ["{{baseUrl}}"], "path": ["tasks", "abc"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+              "pm.test('id is reported as invalid', () => {",
+              "  const d = pm.response.json().details;",
+              "  pm.expect(d[0].message).to.eql('id must be a positive integer');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Update Task - Partial (isCompleted only)",
+      "request": {
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"isCompleted\": true\n}" },
+        "url": {
+          "raw": "{{baseUrl}}/tasks/{{taskId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["tasks", "{{taskId}}"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('isCompleted changed', () => pm.expect(pm.response.json().data.isCompleted).to.be.true);",
+              "pm.test('omitted fields were left untouched', () => {",
+              "  pm.expect(pm.response.json().data.title).to.be.a('string');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Update Task - Full Replacement",
+      "request": {
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Buy groceries and cook\",\n  \"description\": \"Updated description\",\n  \"isCompleted\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/tasks/{{taskId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["tasks", "{{taskId}}"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('every field was replaced', () => {",
+              "  pm.expect(body.data.title).to.eql('Buy groceries and cook');",
+              "  pm.expect(body.data.description).to.eql('Updated description');",
+              "  pm.expect(body.data.isCompleted).to.be.true;",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Update Task - Validation Error (empty body)",
+      "request": {
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{}" },
+        "url": {
+          "raw": "{{baseUrl}}/tasks/{{taskId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["tasks", "{{taskId}}"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+              "pm.test('at least one field is required', () => {",
+              "  const d = pm.response.json().details;",
+              "  pm.expect(d.some(x => x.message === 'at least one field must be provided')).to.be.true;",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Update Task - Not Found (404)",
+      "request": {
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"isCompleted\": true\n}" },
+        "url": { "raw": "{{baseUrl}}/tasks/999999", "host": ["{{baseUrl}}"], "path": ["tasks", "999999"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('404 Not Found', () => pm.response.to.have.status(404));",
+              "pm.test('success is false', () => pm.expect(pm.response.json().success).to.be.false);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Delete Task",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/tasks/{{taskId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["tasks", "{{taskId}}"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('success message is correct', () => {",
+              "  pm.expect(body.success).to.be.true;",
+              "  pm.expect(body.message).to.eql('Task deleted successfully');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Delete Task - Already Deleted (404)",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/tasks/{{taskId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["tasks", "{{taskId}}"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('404 Not Found', () => pm.response.to.have.status(404));",
+              "pm.test('success is false', () => pm.expect(pm.response.json().success).to.be.false);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "List Tasks - Invalid Limit (400)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/tasks?limit=999",
+          "host": ["{{baseUrl}}"],
+          "path": ["tasks"],
+          "query": [{ "key": "limit", "value": "999" }]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+              "pm.test('limit is reported as invalid', () => {",
+              "  const d = pm.response.json().details;",
+              "  pm.expect(d[0].field).to.eql('limit');",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

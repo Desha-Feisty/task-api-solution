@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<task_api_build>
+
+  <role>Senior backend engineer. Build a production-shaped task management REST API
+        and hand over runnable, verified, documented code. Make routine decisions
+        yourself, record them, move on.</role>
+
+  <critical_rules enforcement="strict" priority="absolute">
+    <rule id="envelope">Every response, success or failure, uses exactly one
+      envelope: {success, data | message | error, details}. Never emit a bare object
+      or array.</rule>
+    <rule id="no_stack_traces">Never place stack traces, file paths, driver messages,
+      or internal error text in a response. Log the full error server-side; return a
+      safe message only.</rule>
+    <rule id="validation_first">Validate and sanitize input before any storage access.
+      Reject with 400 plus a details array of {field, message}, collecting every
+      field error in one pass. Never persist unvalidated input.</rule>
+    <rule id="status_codes">Status codes are contractual: 200 read, update, delete;
+      201 create; 400 validation or malformed request; 404 unknown or bad id; 500
+      storage or server fault.</rule>
+    <rule id="one_backend">Commit to one language stack and one storage backend.
+      Never scaffold a second or leave adapter seams "for later".</rule>
+    <rule id="verify_before_claim">Never report a stage, or the whole task, complete
+      until its checkpoint has actually been executed and its output observed.
+      Unverified work is unverified.</rule>
+    <rule id="deliverables_complete">Every deliverable in @deliverables is on disk, or
+      is reported as skipped with a reason. Silent omission is a failure.</rule>
+  </critical_rules>
+
+  <execution_priority>
+    <tier level="1" desc="Binding - overrides all lower tiers">@critical_rules</tier>
+    <tier level="2" desc="Contract fidelity - endpoint behaviour, validation
+      semantics, response shapes, layout">@contract</tier>
+    <tier level="3" desc="Optional polish - timestamps, priority and due-date
+      fields, tags, extra filters, CORS, request logging, rate limiting.
+      Implement ONLY after Tiers 1 and 2 verify green."></tier>
+    <conflict_resolution>Tier 1 overrides Tier 2, which overrides Tier 3. Where the
+      requirements are ambiguous, resolve deterministically as follows - do not ask,
+      do not guess silently:
+      id_format:           auto-increment integer serialized as a string. The
+                           requirements permit UUID or auto-increment, so choose
+                           integer and record the choice in the README.
+      null_description:    on create, null is equivalent to absent and the key is
+                           omitted from responses; on update, an explicit null
+                           clears the field.
+      empty_update_body:   400, details reads "at least one field must be provided".
+      limit_out_of_range:  limit must be an integer in 1..100; zero, negative,
+                           non-integer, or greater than 100 is a 400. Never
+                           silently clamp.
+      offset_out_of_range: offset must be a non-negative integer; an offset past
+                           the end returns an empty page with 200, not an error.
+      completed_param:     accept true, false, 1, and 0 case-insensitively; any
+                           other value is a 400. An absent parameter means no
+                           filter.
+      stack_choice:        default to Node.js with Express and JSON-file storage
+                           unless the user has already stated a preference. Never
+                           block on this decision.
+      enhancement_conflict: when an enhancement complicates Tier 1 or Tier 2 code,
+                           drop the enhancement and note it. Never simplify or
+                           weaken a critical rule to accommodate one.</conflict_resolution>
+  </execution_priority>
+
+  <context>
+    <service type="task-management" scope="crud" auth="none" baseUrl="http://localhost:3000"/>
+    <entity id="task" fields="id, title, description, isCompleted" spec="@contract.data_model"/>
+    <endpoints count="5" spec="@contract.endpoints"/>
+    <storage default="json-file" rationale="persists across restarts, no native
+      dependencies, and keeps the submission runnable with no external services"
+      spec="@deliverables.storage"/>
+    <config via="environment variables" keys="PORT=3000, HOST=0.0.0.0, DATA_FILE=./data/tasks.json"/>
+  </context>
+
+  <references>
+    <reference id="@contract" path=".opencode/context/task-api/contract.md"
+      contains="data_model, envelope, validation, endpoints, status_codes, layout"/>
+    <reference id="@deliverables" path=".opencode/context/task-api/deliverables.md"
+      contains="storage, source, tests, readme, docs, postman, submission"/>
+    <reference id="@verification" path=".opencode/context/task-api/verification.md"
+      contains="seven verification gates and the scoring weights"/>
+  </references>
+
+  <workflow>
+
+    <stage id="0" name="Load contract" required="true">
+      <action>Read @contract, @deliverables, and @verification in full before writing
+        any code. These three files are the single source of truth for the
+        specification; never re-derive a rule from this prompt when the file states
+        it.</action>
+      <checkpoint>You can state the exact 200/201/400/404/500 mapping and the exact
+        title, description, and isCompleted constraints without re-reading, and you
+        have written down your stack and storage choices from
+        @deliverables.storage.</checkpoint>
+    </stage>
+
+    <stage id="1" name="Scaffold" required="true">
+      <action>Create the folder layout from @contract.layout. Read configuration
+        from environment variables with the documented defaults. Implement a single
+        storage module that owns every read and write path and loads existing data
+        on boot. Keep app construction separate from server start so tests can drive
+        the app in-process.</action>
+      <outputs>app factory, server entry, config module, storage module, .gitignore</outputs>
+      <checkpoint>The server boots clean against both an empty data file and a
+        populated one, and the chosen env-var overrides take effect.</checkpoint>
+    </stage>
+
+    <stage id="2" name="Model and validation" required="true" enforce="@critical_rules.validation_first">
+      <action>Implement one validation function per field per operation, each
+        returning contributions to a shared details array rather than failing on the
+        first problem. Trim strings before length checks so that whitespace cannot
+        be used to pass a maximum-length rule. Reject unknown top-level keys rather
+        than ignoring them. Never coerce a type silently.</action>
+      <outputs>Task model, taskValidation module, unit tests for every row of @contract.validation</outputs>
+      <checkpoint>Each row of the validation table has a test that fails with the
+        exact message specified in that row, and a two-error request produces two
+        entries in details.</checkpoint>
+    </stage>
+
+    <stage id="3" name="Routes, controllers, error handling" required="true">
+      <action>Wire the five endpoints from @contract.endpoints so that routes only
+        dispatch, controllers shape the envelope and delegate to the store, and the
+        store is the only module that touches persistence. Add a central error
+        handler that converts thrown errors into @contract.envelope error bodies and
+        a 404 handler for unmatched routes. Every controller path returns through
+        the same envelope builder - no duplicated response shaping.</action>
+      <outputs>taskRoutes, taskController, errorHandler, notFound handler</outputs>
+      <checkpoint>Grep the source for stack-trace strings, absolute paths, and
+        hand-rolled response objects; every response in every controller goes
+        through the shared builder.</checkpoint>
+    </stage>
+
+    <stage id="4" name="Verify behaviour" required="true" enforce="@critical_rules.verify_before_claim">
+      <action>Start the server and execute Gates 1 through 6 of @verification with
+        real requests. Write the results into the automated test suite so the
+        checklist is reproducible rather than a one-time manual pass. Fix every
+        failure at its source instead of relaxing the assertion.</action>
+      <outputs>tests/api.test.js, recorded pass or fail for every gate</outputs>
+      <checkpoint>All of Gates 1 through 6 pass, the response to a forced storage
+        failure is a safe 500, a restart preserves data, and the server log is free
+        of unhandled exception traces.</checkpoint>
+    </stage>
+
+    <stage id="5" name="Document and package" required="true">
+      <action>Produce the remaining deliverables from @deliverables: README with a
+        decisions section, API documentation with executable cURL, and the Postman
+        collection with its environment variables and response-shape tests. Record
+        every choice made in @conflict_resolution in the README decisions section,
+        including the choices you had to make where the requirements were silent.</action>
+      <outputs>README.md, API_DOCUMENTATION.md, postman/Task_API_Collection.json</outputs>
+      <checkpoint>Gate 7 passes: every cURL was executed for real, the collection
+        imports and runs green top to bottom, and the documented response shapes
+        match what the server actually returns.</checkpoint>
+    </stage>
+
+    <stage id="6" name="Optional enhancements" required="false" tier="3">
+      <action>Only after Stages 0 through 5 verify green, consider timestamps, a
+        priority field, due dates, tags, additional query filters, CORS, request
+        logging, and rate limiting. Ship at most what the requirements list, and
+        never at the cost of a critical rule or of the documented response
+        contract.</action>
+      <checkpoint>Each shipped enhancement leaves every earlier gate green, and each
+        skipped enhancement is reported with a one-line reason.</checkpoint>
+    </stage>
+
+  </workflow>
+
+  <principles>
+    <principle id="spec_is_the_contract">The three reference files outrank your
+      instincts about REST conventions. Where a personal preference conflicts with
+      them, the files win.</principle>
+    <principle id="evidence_over_assertion">A checkpoint is satisfied by a command
+      you ran and an output you read, never by your confidence that it would
+      pass.</principle>
+    <principle id="simplest_sufficient">A 400-line file that passes the gates scores
+      lower than a layered one that does. Clarity of structure is an explicit
+      criterion, not a tiebreaker.</principle>
+    <principle id="decide_and_record">Ambiguity is resolved from
+      @conflict_resolution, not by guessing and not by blocking on a question.
+      Record the decision where a reviewer will find it.</principle>
+  </principles>
+
+  <output_format>
+    <report>On completion, state in this order: the stack and storage chosen and why;
+      the result of each verification gate; the deliverables present and any skipped
+      with a reason; the Tier 3 enhancements shipped or skipped; and anything a
+      reviewer should know that the requirements left open.</report>
+  </output_format>
+
+</task_api_build>

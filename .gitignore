@@ -1,0 +1,25 @@
+node_modules/
+npm-debug.log*
+
+# Runtime data
+data/
+*.json.tmp
+
+# Test and coverage output
+coverage/
+.nyc_output/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Editor and OS noise
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

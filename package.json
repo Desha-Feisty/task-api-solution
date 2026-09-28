@@ -1,0 +1,21 @@
+{
+  "name": "task-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "REST API for a task management service",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test tests/api.test.js",
+    "test:collection": "node tests/replay-collection.js",
+    "verify": "npm test && npm run test:collection"
+  },
+  "engines": {
+    "node": ">=20.11"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
